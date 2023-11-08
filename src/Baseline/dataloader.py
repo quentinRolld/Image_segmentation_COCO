@@ -41,14 +41,15 @@ class SegmentationDataset:
 
 
 def create_dataloader(
-    path_to_data: str, batch_size: int = 16
-) -> torch.utils.data.DataLoader:
+    path_to_data: str, batch_size: int = 16) -> torch.utils.data.DataLoader:
     torch.backends.cudnn.benchmark = True
     dataset = SegmentationDataset(path_to_data=path_to_data)
     return torch.utils.data.DataLoader(
         dataset,
-        batch_size=batch_size,
+        batch_size=int(batch_size),
         shuffle=len(dataset.label_paths) != 0,
         pin_memory=True,
-        num_workers=4,
+        num_workers=0, #for deeplab cause not enough memory
+        #num_workers=1,
     )
+

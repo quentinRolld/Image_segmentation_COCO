@@ -7,10 +7,12 @@ import torchvision
 from loadingpy import pybar
 from torchinfo import summary
 
-from .architecture import Segmentor
+from .architecture import Segmentor, Segmentor_efficientnet, Segmentor_mobilenet, UNet ,Segmentor_DeepLabV3
 from .dataloader import create_dataloader
 from .loss import BalancedLoss
-from .UNet import DoubleConv, UNet2, UNetResnet, UNetUpsample
+from .efficientPS import EfficientPS
+from .FCNSegmentor import FCNSegmentor, FCNSegmentor0
+from .UNet import DoubleConv, UNet2, UNetBilinear, UNetNearest, UNetLinear, UNetBicubic, UNetTrilinear
 
 
 class BlankStatement:
@@ -52,7 +54,7 @@ class BaselineTrainer:
         self, model: torch.nn.Module, batch_size: int = 16
     ) -> None:
         dataset = create_dataloader(
-            path_to_data=os.path.join(os.getcwd(), "student_set", "test"),
+            path_to_data=os.path.join(os.getcwd(), "student_set", "val2"),
             batch_size=batch_size,
         )
         model.eval()
@@ -81,7 +83,7 @@ class BaselineTrainer:
                         cpt += 1
 
     def train(
-        self, num_opt_steps: int = 20000, batch_size: int = 16, lr: float = 5.0e-3
+        self, num_opt_steps: int = 2000, batch_size: int = 16, lr: float =1.0e-3 
     ) -> None:
         dataset = create_dataloader(
             path_to_data=os.path.join(os.getcwd(), "student_set", "train"),
@@ -91,16 +93,21 @@ class BaselineTrainer:
         #model = Segmentor_efficientnet()
         #model = Segmentor_mobilenet()
         #model = UNet()
-        #model = Segmentor_DeepLabV3()
+        model = Segmentor_DeepLabV3()
         #model = EfficientPS()
         #model = FCNSegmentor()
+        #model = FCNSegmentor0()
         #model = UNet2()
-        #model = UNetResnet()
-        model = UNetUpsample()
+        #model = UNetBilinear()
+        #model = UNetNearest()
+        #model = UNetLinear()
+        #model = UNetBicubic()
+        #model = UNetTrilinear()
         
-        model.to(self.device)
+        
         if not self.quiet_mode:
             summary(model, input_size=(batch_size, 3, 224, 224))
+        model = model.to(self.device)
         optimizer = torch.optim.Adam(params=model.parameters(), lr=lr)
         loss_fn = BalancedLoss()
         pbar = pybar(range(num_opt_steps), base_str="training")
@@ -133,3 +140,4 @@ class BaselineTrainer:
         except StopIteration:
             pass
         self.make_final_predictions(model=model, batch_size=batch_size)
+

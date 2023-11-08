@@ -35,21 +35,21 @@ if __name__ == "__main__":
         "--batch_size",
         nargs="?",
         type=int,
-        default=32,
+        default=64,
         help="training hyper-parameter: batch-size",
     )
     parser.add_argument(
         "--steps",
         nargs="?",
         type=int,
-        default=20000,
+        default=3000,
         help="training hyper-parameter: number of optimization steps",
     )
     parser.add_argument(
         "--lr",
         nargs="?",
         type=float,
-        default=1.0e-3,
+        default=1.0e-4,
         help="training hyper-parameter: initial learning rate",
     )
 
@@ -82,5 +82,6 @@ if __name__ == "__main__":
         Evaluator().evaluate(
             all_students_folder=os.path.join(os.getcwd(), "submissions")
         )
+        
 
     remove_chache_folders(current_repo=os.getcwd())

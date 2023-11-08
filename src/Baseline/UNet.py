@@ -29,7 +29,7 @@ class DoubleConv(nn.Module):
     
 class UNet2(nn.Module):
     def __init__(
-        self, in_channels=3, out_channels=1, features=[32, 64, 128, 256],
+        self, in_channels=3, out_channels=1, features=[16, 32, 64, 128],
     ):
         super(UNet2, self).__init__()
         self.ups = nn.ModuleList()
@@ -44,7 +44,7 @@ class UNet2(nn.Module):
         # Up part of UNet
         for feature in reversed(features):
             self.ups.append(
-                nn.ConvTranspose2d(
+                nn.ConvTranspose2d(   # On utilise la méthode de convolution transposée pour l'Upsampling
                     feature*2, feature, kernel_size=2, stride=2,
                 )
             )
@@ -77,13 +77,13 @@ class UNet2(nn.Module):
         return self.final_conv(x)
     
     
-    ''' U-Net avec UpSampling au lieu de transpose convolution '''
+    ''' U-Net avec interpolation bilinéaire '''
     
-class UNetUpsample(nn.Module):
+class UNetBilinear(nn.Module):
     def __init__(
-        self, in_channels=3, out_channels=1, features=[8, 16, 32, 64],
+        self, in_channels=3, out_channels=1, features=[16, 32, 64, 128],
     ):
-        super(UNetUpsample, self).__init__()
+        super(UNetBilinear, self).__init__()
         self.ups = nn.ModuleList()
         self.downs = nn.ModuleList()
         self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
@@ -127,6 +127,220 @@ class UNetUpsample(nn.Module):
             x = self.ups[idx](concat_skip)
             
         return self.final_conv(x)
+    
+    
+    
+    
+    ''' UNet qui utilise Nearest neighbour '''
+    
+    
+class UNetNearest(nn.Module):
+    def __init__(
+        self, in_channels=3, out_channels=1, features=[16, 32, 64, 128],
+    ):
+        super(UNetNearest, self).__init__()
+        self.ups = nn.ModuleList()
+        self.downs = nn.ModuleList()
+        self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
+
+        # Down part of UNet
+        for feature in features:
+            self.downs.append(DoubleConv(in_channels, feature))
+            in_channels = feature
+
+        # Up part of UNet
+        for feature in reversed(features):
+            self.ups.append(
+                nn.Sequential(
+                    nn.Upsample(scale_factor=2, mode='nearest'),
+                    DoubleConv(feature*2, feature)
+                )
+            )
+        
+        self.bottleneck = DoubleConv(features[-1], features[-1]*2)
+        self.final_conv = nn.Conv2d(features[0], out_channels, kernel_size=1)
+
+    def forward(self, x):
+        skip_connections = []
+        
+        for down in self.downs:
+            x = down(x)
+            skip_connections.append(x)
+            x = self.pool(x)
+            
+        x = self.bottleneck(x)
+        skip_connections = skip_connections[::-1]
+        
+        for idx in range(0, len(self.ups)):
+            x = self.ups[idx](x)
+            skip_connection = skip_connections[idx]
+            
+            if x.shape != skip_connection.shape:
+                x = TF.resize(x, size=skip_connection.shape[2:])
+                
+            concat_skip = torch.cat((skip_connection, x), dim=1)
+            x = self.ups[idx](concat_skip)
+            
+        return self.final_conv(x)
+    
+    
+    
+    ''' UNet avec linear interpolation '''
+    
+class UNetLinear(nn.Module):
+    def __init__(
+        self, in_channels=3, out_channels=1, features=[16, 32, 64, 128],
+    ):
+        super(UNetLinear, self).__init__()
+        self.ups = nn.ModuleList()
+        self.downs = nn.ModuleList()
+        self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
+
+        # Down part of UNet
+        for feature in features:
+            self.downs.append(DoubleConv(in_channels, feature))
+            in_channels = feature
+
+        # Up part of UNet
+        for feature in reversed(features):
+            self.ups.append(
+                nn.Sequential(
+                    nn.Upsample(scale_factor=2, mode='linear', align_corners=True),
+                    DoubleConv(feature*2, feature)
+                )
+            )
+        
+        self.bottleneck = DoubleConv(features[-1], features[-1]*2)
+        self.final_conv = nn.Conv2d(features[0], out_channels, kernel_size=1)
+
+    def forward(self, x):
+        skip_connections = []
+        
+        for down in self.downs:
+            x = down(x)
+            skip_connections.append(x)
+            x = self.pool(x)
+            
+        x = self.bottleneck(x)
+        skip_connections = skip_connections[::-1]
+        
+        for idx in range(0, len(self.ups)):
+            x = self.ups[idx](x)
+            skip_connection = skip_connections[idx]
+            
+            if x.shape != skip_connection.shape:
+                x = TF.resize(x, size=skip_connection.shape[2:])
+                
+            concat_skip = torch.cat((skip_connection, x), dim=1)
+            x = self.ups[idx](concat_skip)
+            
+        return self.final_conv(x)
+    
+    
+    
+    ''' UNet avec Bicubic '''
+    
+class UNetBicubic(nn.Module):
+    def __init__(
+        self, in_channels=3, out_channels=1, features=[16, 32, 64, 128],
+    ):
+        super(UNetBicubic, self).__init__()
+        self.ups = nn.ModuleList()
+        self.downs = nn.ModuleList()
+        self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
+
+        # Down part of UNet
+        for feature in features:
+            self.downs.append(DoubleConv(in_channels, feature))
+            in_channels = feature
+
+        # Up part of UNet
+        for feature in reversed(features):
+            self.ups.append(
+                nn.Sequential(
+                    nn.Upsample(scale_factor=2, mode='bicubic', align_corners=True),
+                    DoubleConv(feature*2, feature)
+                )
+            )
+        
+        self.bottleneck = DoubleConv(features[-1], features[-1]*2)
+        self.final_conv = nn.Conv2d(features[0], out_channels, kernel_size=1)
+
+    def forward(self, x):
+        skip_connections = []
+        
+        for down in self.downs:
+            x = down(x)
+            skip_connections.append(x)
+            x = self.pool(x)
+            
+        x = self.bottleneck(x)
+        skip_connections = skip_connections[::-1]
+        
+        for idx in range(0, len(self.ups)):
+            x = self.ups[idx](x)
+            skip_connection = skip_connections[idx]
+            
+            if x.shape != skip_connection.shape:
+                x = TF.resize(x, size=skip_connection.shape[2:])
+                
+            concat_skip = torch.cat((skip_connection, x), dim=1)
+            x = self.ups[idx](concat_skip)
+            
+        return self.final_conv(x)
+    
+    
+    ''' UNet avec trilinear '''
+    
+class UNetTrilinear(nn.Module):
+    def __init__(
+        self, in_channels=3, out_channels=1, features=[16, 32, 64, 128],
+    ):
+        super(UNetTrilinear, self).__init__()
+        self.ups = nn.ModuleList()
+        self.downs = nn.ModuleList()
+        self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
+
+        # Down part of UNet
+        for feature in features:
+            self.downs.append(DoubleConv(in_channels, feature))
+            in_channels = feature
+
+        # Up part of UNet
+        for feature in reversed(features):
+            self.ups.append(
+                nn.Sequential(
+                    nn.Upsample(scale_factor=2, mode='trilinear', align_corners=True),
+                    DoubleConv(feature*2, feature)
+                )
+            )
+        
+        self.bottleneck = DoubleConv(features[-1], features[-1]*2)
+        self.final_conv = nn.Conv2d(features[0], out_channels, kernel_size=1)
+
+    def forward(self, x):
+        skip_connections = []
+        
+        for down in self.downs:
+            x = down(x)
+            skip_connections.append(x)
+            x = self.pool(x)
+            
+        x = self.bottleneck(x)
+        skip_connections = skip_connections[::-1]
+        
+        for idx in range(0, len(self.ups)):
+            x = self.ups[idx](x)
+            skip_connection = skip_connections[idx]
+            
+            if x.shape != skip_connection.shape:
+                x = TF.resize(x, size=skip_connection.shape[2:])
+                
+            concat_skip = torch.cat((skip_connection, x), dim=1)
+            x = self.ups[idx](concat_skip)
+            
+        return self.final_conv(x)
+    
     
     
     
@@ -181,7 +395,7 @@ class UNetUpsample(nn.Module):
         return self.final_conv(x)'''
     
     
-class UNetResnet(nn.Module):
+class UNetResnet1(nn.Module):
     def __init__(self, out_channels=1):
         super(UNetResnet, self).__init__()
         self.resnet = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
@@ -244,7 +458,7 @@ def convrelu(in_channels, out_channels, kernel, padding):
     )
 
 
-class ResNetUNet(nn.Module):
+class UNetResNet2(nn.Module):
     def __init__(self, n_class=1):
         super().__init__()
 
